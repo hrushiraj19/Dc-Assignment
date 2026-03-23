@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, Settings2, Info } from 'lucide-react';
 import { generateWaveform, schemeDescriptions, SCHEMES } from './utils/encoding';
-import type { EncodingScheme, EncodingCategory, Point } from './utils/encoding';
+import type { EncodingScheme } from './utils/encoding';
 
 function App() {
   const [sequence, setSequence] = useState('10110000000010');
