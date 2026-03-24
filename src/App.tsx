@@ -257,9 +257,9 @@ function App() {
         <motion.h1
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-4xl md:text-6xl font-sans font-bold mb-3 tracking-tight"
+          className="text-4xl md:text-5xl font-sans font-bold mb-3 tracking-tight"
         >
-          Line Encoding <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-blue to-neon-purple">Simulator</span>
+          Digital Line Encoding & <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-blue to-neon-purple">Signal Simulation</span>
         </motion.h1>
         <p className="text-gray-400 max-w-2xl mx-auto">
           Interactive visualization of digital line encoding techniques — NRZ, Manchester, Scrambling &amp; Multilevel.
