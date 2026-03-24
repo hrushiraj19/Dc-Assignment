@@ -6,6 +6,13 @@ import type { EncodingScheme } from './utils/encoding';
 
 // ─── Encoding Rules Tables ─────────────────────────────────────────────────────
 const ENCODING_RULES: Record<EncodingScheme, { columns: string[]; rows: string[][] }> = {
+  'Unipolar NRZ': {
+    columns: ['Input Bit', 'Signal Level', 'Voltage'],
+    rows: [
+      ['0', 'Zero', '0V'],
+      ['1', 'High', '+V'],
+    ],
+  },
   'NRZ-L': {
     columns: ['Input Bit', 'Signal Level', 'Voltage'],
     rows: [
@@ -18,6 +25,13 @@ const ENCODING_RULES: Record<EncodingScheme, { columns: string[]; rows: string[]
     rows: [
       ['0', 'No transition', 'Stay same'],
       ['1', 'Transition at start', 'Invert signal'],
+    ],
+  },
+  'RZ': {
+    columns: ['Input Bit', 'Condition', 'Voltage Trace'],
+    rows: [
+      ['0', 'Zero', '-V (Full Bit)'],
+      ['1', 'Transitions', '+V (1st Half) → 0V (2nd Half)'],
     ],
   },
   'Manchester': {
@@ -41,6 +55,15 @@ const ENCODING_RULES: Record<EncodingScheme, { columns: string[]; rows: string[]
       ['1 (first)', '+V', 'Positive'],
       ['1 (next)', '-V', 'Negative'],
       ['1 (next)', '+V', 'Alternates'],
+    ],
+  },
+  'Pseudoternary': {
+    columns: ['Input Bit', 'Signal', 'Polarity'],
+    rows: [
+      ['1', '0V (Zero)', '—'],
+      ['0 (first)', '+V', 'Positive'],
+      ['0 (next)', '-V', 'Negative'],
+      ['0 (next)', '+V', 'Alternates'],
     ],
   },
   'B8ZS': {
@@ -81,19 +104,41 @@ const ENCODING_RULES: Record<EncodingScheme, { columns: string[]; rows: string[]
       ['00', '-3', '-3V'],
     ],
   },
+  '8B/6T': {
+    columns: ['Binary Group', 'Ternary Symbols', 'Symbol Levels'],
+    rows: [
+      ['8 Bits', '6 Symbols', '+, -, 0'],
+      ['DC Control', 'Combined Weight', 'Target weight = 0'],
+    ],
+  },
+  '4D-PAM5': {
+    columns: ['Bit Pair', 'Symbol', 'Voltage Level'],
+    rows: [
+      ['11', '+2', '+2V'],
+      ['10', '+1', '+1V'],
+      ['00', '-1', '-1V'],
+      ['01', '-2', '-2V'],
+      ['Error', '0', '0V'],
+    ],
+  },
 };
 
 // ─── Scheme Stats ────────────────────────────────────────────────────────────
 const SCHEME_STATS: Record<EncodingScheme, { levels: string; bandwidth: string; dcBalance: string; selfSync: string }> = {
+  'Unipolar NRZ':         { levels: '2', bandwidth: 'B = N/2', dcBalance: '❌ No', selfSync: '❌ No' },
   'NRZ-L':                { levels: '2', bandwidth: 'B = N/2', dcBalance: '❌ No', selfSync: '❌ No' },
   'NRZ-I':                { levels: '2', bandwidth: 'B = N/2', dcBalance: '❌ No', selfSync: '❌ No' },
+  'RZ':                   { levels: '3', bandwidth: 'B = N',   dcBalance: '❌ No', selfSync: '✅ Yes' },
   'Manchester':           { levels: '2', bandwidth: 'B = N',   dcBalance: '✅ Yes', selfSync: '✅ Yes' },
   'Differential Manchester': { levels: '2', bandwidth: 'B = N', dcBalance: '✅ Yes', selfSync: '✅ Yes' },
   'Bipolar AMI':          { levels: '3', bandwidth: 'B = N/2', dcBalance: '✅ Yes', selfSync: '⚠️ Partial' },
+  'Pseudoternary':        { levels: '3', bandwidth: 'B = N/2', dcBalance: '✅ Yes', selfSync: '⚠️ Partial' },
   'B8ZS':                 { levels: '3', bandwidth: 'B = N/2', dcBalance: '✅ Yes', selfSync: '✅ Yes' },
   'HDB3':                 { levels: '3', bandwidth: 'B = N/2', dcBalance: '✅ Yes', selfSync: '✅ Yes' },
   'MLT-3':                { levels: '3', bandwidth: 'B = N/3', dcBalance: '✅ Yes', selfSync: '⚠️ Partial' },
   '2B1Q':                 { levels: '4', bandwidth: 'B = N/4', dcBalance: '✅ Yes', selfSync: '⚠️ Partial' },
+  '8B/6T':                { levels: '3', bandwidth: 'B = 3/4 N', dcBalance: '✅ Yes', selfSync: '✅ Yes' },
+  '4D-PAM5':              { levels: '5', bandwidth: 'B = N/8', dcBalance: '✅ Yes', selfSync: '✅ Yes' },
 };
 
 function App() {
@@ -108,6 +153,7 @@ function App() {
   };
 
   const is2B1Q = scheme === '2B1Q';
+  const isMultilevel = ['2B1Q', '8B/6T', '4D-PAM5'].includes(scheme);
 
   const points = useMemo(() => {
     if (!sequence) return [];
@@ -115,18 +161,18 @@ function App() {
   }, [sequence, scheme]);
 
   const scaleX = 80;
-  const scaleY = is2B1Q ? 20 : 60;
+  const scaleY = isMultilevel ? 20 : 60;
   const offsetX = 40;
   const offsetY = 120;
 
   const pathData = useMemo(() => {
     if (points.length === 0) return '';
-    let d = `M ${points[0].x * scaleX + offsetX} ${points[0].y * scaleY + offsetY} `;
+    let d = `M ${points[0].x * scaleX + offsetX} ${offsetY - points[0].y * scaleY} `;
     for (let i = 1; i < points.length; i++) {
-      d += `L ${points[i].x * scaleX + offsetX} ${points[i].y * scaleY + offsetY} `;
+      d += `L ${points[i].x * scaleX + offsetX} ${offsetY - points[i].y * scaleY} `;
     }
     return d;
-  }, [points, scaleX, scaleY]);
+  }, [points, scaleX, scaleY, offsetX, offsetY]);
 
   const violationPathData = useMemo(() => {
     if (points.length === 0) return '';
@@ -135,49 +181,65 @@ function App() {
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
       if (p.isViolation) {
-        if (!tracking) { d += `M ${p.x * scaleX + offsetX} ${p.y * scaleY + offsetY} `; tracking = true; }
-        else d += `L ${p.x * scaleX + offsetX} ${p.y * scaleY + offsetY} `;
+        if (!tracking) { d += `M ${p.x * scaleX + offsetX} ${offsetY - p.y * scaleY} `; tracking = true; }
+        else d += `L ${p.x * scaleX + offsetX} ${offsetY - p.y * scaleY} `;
       } else { tracking = false; }
     }
     return d;
-  }, [points, scaleX, scaleY]);
+  }, [points, scaleX, scaleY, offsetX, offsetY]);
 
   const groupLabels = useMemo(() => {
     const labels: { x: number; text: string }[] = [];
-    if (!is2B1Q || points.length === 0) return labels;
-    for (let i = 0; i < points.length; i += 2) {
+    if (!isMultilevel || points.length === 0) return labels;
+    for (let i = 0; i < points.length; i += (scheme === '8B/6T' ? 2 : 2)) {
       if (points[i]?.label) {
-        labels.push({ x: (points[i].x + Math.min(sequence.length, points[i].x + 2)) / 2 * scaleX + offsetX, text: points[i].label! });
+        labels.push({ x: (points[i].x + Math.min(sequence.length * 2, points[i].x + 2)) / 2 * scaleX + offsetX, text: points[i].label! });
       }
     }
     return labels;
-  }, [points, is2B1Q, sequence.length, scaleX]);
+  }, [points, isMultilevel, sequence.length, scaleX, scheme]);
 
   // Bit-by-bit breakdown
   const breakdown = useMemo(() => {
     if (!sequence) return [];
     const pts = generateWaveform(sequence, scheme);
     const rows: { bit: string; index: number; signal: string; isViolation?: boolean }[] = [];
-    if (is2B1Q) {
+    
+    if (scheme === '2B1Q') {
       const padded = sequence.length % 2 === 0 ? sequence : sequence + '0';
       for (let i = 0; i < padded.length; i += 2) {
         const pair = padded.substring(i, i + 2);
         const map: Record<string, string> = { '10': '+3V', '11': '+1V', '01': '-1V', '00': '-3V' };
         rows.push({ bit: pair, index: i / 2 + 1, signal: map[pair] ?? '?' });
       }
+    } else if (scheme === '4D-PAM5') {
+        const padded = sequence.length % 2 === 0 ? sequence : sequence + '0';
+        for (let i = 0; i < padded.length; i += 2) {
+          const pair = padded.substring(i, i + 2);
+          const map: Record<string, string> = { '00': '-2V', '01': '-1V', '10': '+1V', '11': '+2V' };
+          rows.push({ bit: pair, index: i / 2 + 1, signal: map[pair] ?? '?' });
+        }
+    } else if (scheme === '8B/6T') {
+        // Simplified breakdown for 8B/6T showing nibbles
+        const padded = sequence.length % 4 !== 0 ? sequence + '0'.repeat(4 - sequence.length % 4) : sequence;
+        for (let i = 0; i < padded.length; i += 4) {
+          const nibble = padded.substring(i, i + 4);
+          rows.push({ bit: nibble, index: i / 4 + 1, signal: 'Ternary' });
+        }
     } else {
-      // Find the signal level at the start of each bit period
+      // Find the signal level inside each bit period (offset slightly from start to avoid boundary points)
       sequence.split('').forEach((b, i) => {
-        const startPt = pts.find(p => p.x === i);
-        if (startPt) {
-          const yMap: Record<number, string> = { 1: '+V', 0: '0V', '-1': '-V', 3: '+3V', '-3': '-3V' };
-          const v = startPt.y;
-          rows.push({ bit: b, index: i + 1, signal: yMap[v] ?? `${v > 0 ? '+' : ''}${v}V`, isViolation: startPt.isViolation });
+        const periodPt = pts.find(p => p.x >= i && p.x < i + 1);
+        if (periodPt) {
+          const yMap: Record<number, string> = { 1: '+V', 0: '0V', '-1': '-V', 2: '+2V', '-2': '-2V', 3: '+3V', '-3': '-3V' };
+          const v = periodPt.y;
+          rows.push({ bit: b, index: i + 1, signal: yMap[v] ?? `${v > 0 ? '+' : ''}${v}V`, isViolation: periodPt.isViolation });
         }
       });
     }
     return rows;
-  }, [sequence, scheme, is2B1Q]);
+  }, [sequence, scheme]);
+
 
   const rules = ENCODING_RULES[scheme];
   const stats = SCHEME_STATS[scheme];
@@ -324,7 +386,16 @@ function App() {
 
                   {/* Y-axis grid lines */}
                   <g className="text-gray-500/30 text-xs">
-                    {is2B1Q ? (
+                    {scheme === '4D-PAM5' ? (
+                      <>
+                        {[2, 1, 0, -1, -2].map(v => (
+                          <g key={v}>
+                            <line x1="0" y1={offsetY - v * scaleY} x2="100%" y2={offsetY - v * scaleY} stroke="currentColor" strokeWidth={v === 0 ? 2 : 1} strokeDasharray={v === 0 ? '0' : '4'} />
+                            <text x="8" y={offsetY - v * scaleY - 4} fill="#9ca3af" fontSize="11">{v > 0 ? `+${v}V` : v === 0 ? '0V' : `${v}V`}</text>
+                          </g>
+                        ))}
+                      </>
+                    ) : is2B1Q ? (
                       <>
                         {[3, 1, 0, -1, -3].map(v => (
                           <g key={v}>
